@@ -1,6 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type MemoryTrackerPlugin from "./main";
 import { parseHeadingLine } from "./parser";
+import { unitLabel } from "./reconcile";
 
 const WEEKDAYS = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
@@ -119,6 +120,16 @@ export class MemoryTrackerSettingTab extends PluginSettingTab {
 		// ---- 표시 ----
 		new Setting(containerEl).setName("표시").setHeading();
 
+		new Setting(containerEl)
+			.setName("노트에 ✅ 표시")
+			.setDesc("복습을 체크하면 공부한 날 노트의 해당 항목 끝에 ✅를 붙이고, 해제하면 지워요. 완료한 단계 수만큼 붙어요.")
+			.addToggle((t) =>
+				t.setValue(s.markInNote).onChange(async (v) => {
+					s.markInNote = v;
+					await save();
+				}),
+			);
+
 		new Setting(containerEl).setName("사이드바 뷰 사용").addToggle((t) =>
 			t.setValue(s.enableSidebar).onChange(async (v) => {
 				s.enableSidebar = v;
@@ -154,7 +165,7 @@ export class MemoryTrackerSettingTab extends PluginSettingTab {
 		if (!ignored.length) containerEl.createDiv({ cls: "setting-item-description", text: "추적 금지한 항목이 없어요." });
 		for (const u of ignored) {
 			new Setting(containerEl)
-				.setName(u.heading)
+				.setName(unitLabel(u))
 				.setDesc(`${u.date} · ${u.path}${u.missing ? " (노트에서 사라짐)" : ""}`)
 				.addButton((b) => b.setButtonText("이름 변경").onClick(() => this.plugin.promptRename(u, () => this.display())))
 				.addButton((b) =>

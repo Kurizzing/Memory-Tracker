@@ -1,7 +1,7 @@
 import { moment, Notice, Plugin, TAbstractFile, TFile, WorkspaceLeaf } from "obsidian";
 import { TextPromptModal } from "./modals";
-import { findStudyHeadings, insertCodeblock, renameHeadingLines, renameStudyHeading } from "./parser";
-import { reconcileFile } from "./reconcile";
+import { findStudyItems, insertCodeblock, renameHeadingLines, renameStudyItem, setDoneMarks } from "./parser";
+import { reconcileFile, unitLabel } from "./reconcile";
 import { MemoryTrackerSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, PluginData, Settings, StageKey, Unit } from "./types";
 import { ReviewBlock, ReviewView, VIEW_TYPE } from "./view";
@@ -65,7 +65,15 @@ export default class MemoryTrackerPlugin extends Plugin {
 	async loadAll() {
 		const data = ((await this.loadData()) ?? {}) as Partial<PluginData>;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
-		this.units = data.units ?? [];
+		// 0.1.0 데이터(헤더 단위, heading 필드) → 과목 헤더 단위로 변환
+		this.units = (data.units ?? []).map((u) => {
+			const legacy = u as Unit & { heading?: string };
+			if (legacy.text === undefined && legacy.heading !== undefined) {
+				const { heading, ...rest } = legacy;
+				return { ...rest, category: heading, text: heading, kind: "heading" as const };
+			}
+			return u;
+		});
 		if (!this.settings.startDate) {
 			this.settings.startDate = this.today();
 			await this.saveAll();
@@ -131,7 +139,7 @@ export default class MemoryTrackerPlugin extends Plugin {
 			if (!date) continue;
 			seen.add(file.path);
 			const content = await this.app.vault.cachedRead(file);
-			changed = reconcileFile(this.units, file.path, date, findStudyHeadings(content, this.settings.parentHeading)) || changed;
+			changed = reconcileFile(this.units, file.path, date, findStudyItems(content, this.settings.parentHeading)) || changed;
 		}
 		// 노트가 없어졌거나 추적 범위를 벗어난 단위는 숨김
 		for (const u of this.units) {
@@ -148,7 +156,7 @@ export default class MemoryTrackerPlugin extends Plugin {
 		if (this.suspendReconcile) return;
 		const date = this.trackedDate(file.path);
 		if (!date) return;
-		if (reconcileFile(this.units, file.path, date, findStudyHeadings(content, this.settings.parentHeading))) {
+		if (reconcileFile(this.units, file.path, date, findStudyItems(content, this.settings.parentHeading))) {
 			await this.commit();
 		}
 	}
@@ -186,12 +194,25 @@ export default class MemoryTrackerPlugin extends Plugin {
 		for (const s of stages) done ? set.add(s) : set.delete(s);
 		unit.done = [...set];
 		await this.commit();
+		if (this.settings.markInNote) await this.writeDoneMarks(unit);
+	}
+
+	/** 공부한 날 노트의 해당 항목 끝에 완료한 단계 수만큼 ✅ 표시 */
+	private async writeDoneMarks(unit: Unit) {
+		const file = this.app.vault.getAbstractFileByPath(unit.path);
+		if (!(file instanceof TFile)) return;
+		const parent = this.settings.parentHeading;
+		const target = { category: unit.category, text: unit.text, kind: unit.kind };
+		const count = unit.done.length;
+		const content = await this.app.vault.read(file);
+		if (setDoneMarks(content, parent, target, count) === null) return;
+		await this.app.vault.process(file, (c) => setDoneMarks(c, parent, target, count) ?? c);
 	}
 
 	async setIgnored(unit: Unit, ignored: boolean) {
 		unit.ignored = ignored;
 		await this.commit();
-		if (ignored) new Notice(`추적 금지: ${unit.heading} (설정에서 해제할 수 있어요)`);
+		if (ignored) new Notice(`추적 금지: ${unitLabel(unit)} (설정에서 해제할 수 있어요)`);
 	}
 
 	async openUnit(unit: Unit) {
@@ -204,35 +225,41 @@ export default class MemoryTrackerPlugin extends Plugin {
 	}
 
 	promptRename(unit: Unit, after?: () => void) {
-		new TextPromptModal(this.app, "공부 단위 이름 변경", unit.heading, async (name) => {
+		new TextPromptModal(this.app, `이름 변경 (${unitLabel(unit)})`, unit.text, async (name) => {
 			await this.renameUnit(unit, name);
 			after?.();
 		}).open();
 	}
 
-	/** 노트의 헤더를 고치고 기록을 그대로 이어감 */
+	/** 노트의 항목(또는 과목 헤더)을 고치고 기록을 그대로 이어감 */
 	async renameUnit(unit: Unit, newText: string) {
-		if (newText === unit.heading) return;
+		if (newText === unit.text) return;
 		const file = this.app.vault.getAbstractFileByPath(unit.path);
 		if (!(file instanceof TFile)) {
 			new Notice("노트를 찾을 수 없어요");
 			return;
 		}
 		const parent = this.settings.parentHeading;
+		const target = { category: unit.category, text: unit.text, kind: unit.kind };
 		const content = await this.app.vault.read(file);
-		if (findStudyHeadings(content, parent).some((h) => h.text === newText)) {
-			new Notice("같은 노트에 이미 같은 이름의 헤더가 있어요");
+		const items = findStudyItems(content, parent);
+		const dup = items.some((it) =>
+			unit.kind === "heading" ? it.category === newText : it.category === unit.category && it.text === newText,
+		);
+		if (dup) {
+			new Notice("같은 노트에 이미 같은 이름이 있어요");
 			return;
 		}
-		if (renameStudyHeading(content, parent, unit.heading, newText) === null) {
-			new Notice("노트에서 헤더를 찾지 못했어요");
+		if (renameStudyItem(content, parent, target, newText) === null) {
+			new Notice("노트에서 항목을 찾지 못했어요");
 			return;
 		}
-		const oldText = unit.heading;
-		unit.heading = newText; // 수정 이벤트가 오기 전에 먼저 바꿔서 같은 단위로 인식되게 함
-		await this.app.vault.process(file, (c) => renameStudyHeading(c, parent, oldText, newText) ?? c);
+		// 수정 이벤트가 오기 전에 먼저 바꿔서 같은 단위로 인식되게 함
+		unit.text = newText;
+		if (unit.kind === "heading") unit.category = newText;
+		await this.app.vault.process(file, (c) => renameStudyItem(c, parent, target, newText) ?? c);
 		await this.commit();
-		new Notice(`이름 변경: ${oldText} → ${newText}`);
+		new Notice(`이름 변경: ${target.text} → ${newText}`);
 	}
 
 	/** 부모 헤더 변경. rewrite면 추적 범위의 데일리 노트 헤더도 고침. 수정한 노트 수 반환 */

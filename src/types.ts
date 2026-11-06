@@ -3,13 +3,16 @@ export type StageKey = "d1" | "d3" | "thuFlow" | "thuFull";
 /** 흐름 인출(다시 읽기) / 전체 인출(검은펜·빨간펜) */
 export type Mode = "flow" | "full";
 
-/** 추적 중인 공부 단위 하나 (데일리 노트의 헤더 하나) */
+/** 추적 중인 공부 단위 하나 (과목 헤더 아래의 목록 항목 하나, 목록이 없으면 과목 헤더) */
 export interface Unit {
 	id: string;
 	/** 데일리 노트 경로 */
 	path: string;
-	/** 헤더 텍스트 (# 제외) */
-	heading: string;
+	/** 과목 (예: 한국사) */
+	category: string;
+	/** 항목 텍스트 (예: 최태성 심화강의 14, 15, 16강) */
+	text: string;
+	kind: "heading" | "item";
 	/** 마지막으로 파싱된 줄 번호 (이동용) */
 	line: number;
 	/** 노트 안에서의 순서 */
@@ -38,6 +41,8 @@ export interface Settings {
 	mergeSameDay: boolean;
 	/** 밀린 복습 표시 */
 	showOverdue: boolean;
+	/** 체크하면 공부한 날 노트의 항목 끝에 ✅ 표시 (완료한 단계 수만큼) */
+	markInNote: boolean;
 	enableSidebar: boolean;
 	enableCodeblock: boolean;
 	/** 코드블록을 자동으로 넣을 헤더 (예: "## 복습") */
@@ -48,10 +53,11 @@ export const DEFAULT_SETTINGS: Settings = {
 	startDate: "",
 	dailyFolder: "",
 	dailyFormat: "",
-	parentHeading: "## 공부",
+	parentHeading: "## 학습",
 	reviewWeekday: 4,
 	mergeSameDay: false,
 	showOverdue: true,
+	markInNote: true,
 	enableSidebar: true,
 	enableCodeblock: true,
 	codeblockHeading: "## 복습",

@@ -6,7 +6,7 @@ import type { Unit } from "../src/types";
 const THU = 4;
 
 function unit(date: string, heading = date, done: Unit["done"] = []): Unit {
-	return { id: heading, path: `${date}.md`, heading, line: 0, order: 0, date, done, ignored: false, missing: false };
+	return { id: heading, path: `${date}.md`, category: "c", text: heading, kind: "item", line: 0, order: 0, date, done, ignored: false, missing: false };
 }
 
 const opts = { reviewWeekday: THU, merge: false, includeOverdue: false, startDate: "" };

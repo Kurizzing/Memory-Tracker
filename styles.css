@@ -98,6 +98,11 @@
 	padding: 0 4px;
 }
 
+.mt-category {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
 .mt-ignore {
 	opacity: 0;
 	flex-shrink: 0;

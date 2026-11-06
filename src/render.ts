@@ -70,13 +70,14 @@ function renderItem(el: HTMLElement, plugin: MemoryTrackerPlugin, item: ReviewIt
 	cb.addEventListener("change", () => plugin.setStagesDone(unit, item.stages, cb.checked));
 
 	const body = row.createDiv({ cls: "mt-body" });
-	const link = body.createEl("a", { cls: "mt-title", text: unit.heading });
+	const link = body.createEl("a", { cls: "mt-title", text: unit.text });
 	link.addEventListener("click", (e) => {
 		e.preventDefault();
 		plugin.openUnit(unit);
 	});
 	const meta = body.createDiv({ cls: "mt-meta" });
 	meta.createSpan({ text: md(unit.date) });
+	if (unit.kind === "item") meta.createSpan({ cls: "mt-tag mt-category", text: unit.category });
 	if (item.overdue) {
 		meta.createSpan({ cls: "mt-tag", text: `${STAGE_LABEL[item.group]} · ${md(item.due)}` });
 	}
