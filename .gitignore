@@ -1,0 +1,22 @@
+# 의존성
+node_modules/
+
+# 빌드 결과물 (npm run build로 생성)
+main.js
+*.js.map
+
+# 테스트 번들
+.test/
+
+# 플러그인 런타임 데이터 (개인 복습 기록)
+data.json
+
+# 로그 / 환경
+*.log
+.env
+
+# 에디터 / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

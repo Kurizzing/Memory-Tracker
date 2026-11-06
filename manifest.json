@@ -1,0 +1,9 @@
+{
+  "id": "memory-tracker",
+  "name": "Memory Tracker",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "데일리 노트의 공부 헤더를 추적해 다음 날 / 3일 후 / 복습일 복습을 관리합니다.",
+  "author": "kuri",
+  "isDesktopOnly": false
+}

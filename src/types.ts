@@ -1,0 +1,63 @@
+/** 복습 단계: 다음 날 / 3일 후 / 복습일(공부한 주) / 복습일(다음 주) */
+export type StageKey = "d1" | "d3" | "thuFlow" | "thuFull";
+/** 흐름 인출(다시 읽기) / 전체 인출(검은펜·빨간펜) */
+export type Mode = "flow" | "full";
+
+/** 추적 중인 공부 단위 하나 (데일리 노트의 헤더 하나) */
+export interface Unit {
+	id: string;
+	/** 데일리 노트 경로 */
+	path: string;
+	/** 헤더 텍스트 (# 제외) */
+	heading: string;
+	/** 마지막으로 파싱된 줄 번호 (이동용) */
+	line: number;
+	/** 노트 안에서의 순서 */
+	order: number;
+	/** 공부한 날짜 YYYY-MM-DD (노트 날짜) */
+	date: string;
+	/** 완료한 단계 */
+	done: StageKey[];
+	/** 추적 금지 */
+	ignored: boolean;
+	/** 노트에서 헤더가 사라짐 (다시 나타나면 복구) */
+	missing: boolean;
+}
+
+export interface Settings {
+	/** 이 날짜 이후의 데일리 노트만 추적 (YYYY-MM-DD) */
+	startDate: string;
+	/** 비우면 코어 데일리 노트 설정을 따름 */
+	dailyFolder: string;
+	dailyFormat: string;
+	/** 공부 단위들의 부모 헤더 (예: "## 공부") */
+	parentHeading: string;
+	/** 복습일 요일 (0=일 ... 4=목) */
+	reviewWeekday: number;
+	/** 같은 날 겹치는 단계를 하나로 합치기 */
+	mergeSameDay: boolean;
+	/** 밀린 복습 표시 */
+	showOverdue: boolean;
+	enableSidebar: boolean;
+	enableCodeblock: boolean;
+	/** 코드블록을 자동으로 넣을 헤더 (예: "## 복습") */
+	codeblockHeading: string;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+	startDate: "",
+	dailyFolder: "",
+	dailyFormat: "",
+	parentHeading: "## 공부",
+	reviewWeekday: 4,
+	mergeSameDay: false,
+	showOverdue: true,
+	enableSidebar: true,
+	enableCodeblock: true,
+	codeblockHeading: "## 복습",
+};
+
+export interface PluginData {
+	settings: Settings;
+	units: Unit[];
+}

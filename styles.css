@@ -1,0 +1,108 @@
+.mt-view {
+	padding: 8px 12px;
+}
+
+.mt-nav {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-bottom: 8px;
+}
+
+.mt-nav-title {
+	font-weight: 600;
+	flex: 1;
+	text-align: center;
+}
+
+.mt-block .mt-nav-title {
+	text-align: left;
+	margin-bottom: 6px;
+}
+
+.mt-today {
+	font-size: var(--font-ui-smaller);
+	padding: 2px 8px;
+}
+
+.mt-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	padding: 8px 0;
+}
+
+.mt-group {
+	margin-bottom: 12px;
+}
+
+.mt-group-title {
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	color: var(--text-muted);
+	margin-bottom: 4px;
+}
+
+.mt-overdue .mt-group-title {
+	color: var(--text-error);
+}
+
+.mt-item {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	padding: 4px 4px;
+	border-radius: var(--radius-s);
+}
+
+.mt-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mt-check {
+	margin-top: 3px;
+	flex-shrink: 0;
+}
+
+.mt-body {
+	flex: 1;
+	min-width: 0;
+}
+
+.mt-title {
+	color: var(--text-normal);
+	text-decoration: none;
+	cursor: pointer;
+	word-break: break-word;
+}
+
+.mt-title:hover {
+	color: var(--text-accent);
+}
+
+.mt-done .mt-title {
+	color: var(--text-faint);
+	text-decoration: line-through;
+}
+
+.mt-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.mt-tag {
+	background: var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	padding: 0 4px;
+}
+
+.mt-ignore {
+	opacity: 0;
+	flex-shrink: 0;
+}
+
+.mt-item:hover .mt-ignore {
+	opacity: 1;
+}

@@ -1,0 +1,21 @@
+{
+  "name": "memory-tracker",
+  "version": "0.1.0",
+  "description": "데일리 노트의 공부 헤더를 추적해 다음 날 / 3일 후 / 복습일 복습을 관리하는 Obsidian 플러그인",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "node scripts/test.mjs",
+    "deploy": "npm run build && node scripts/deploy.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "0.25.0",
+    "obsidian": "latest",
+    "tslib": "2.8.1",
+    "typescript": "5.7.3"
+  }
+}
