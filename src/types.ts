@@ -1,5 +1,5 @@
-/** 복습 단계: 다음 날 / 3일 후 / 복습일(공부한 주) / 복습일(다음 주) */
-export type StageKey = "d1" | "d3" | "thuFlow" | "thuFull";
+/** 복습 단계 id (StageDef.id) */
+export type StageKey = string;
 /** 흐름 인출(다시 읽기) / 전체 인출(검은펜·빨간펜) */
 export type Mode = "flow" | "full";
 
@@ -27,6 +27,23 @@ export interface Unit {
 	missing: boolean;
 }
 
+/** 복습 단계 하나: "N일 후" 또는 "N번째 복습일" */
+export interface StageDef {
+	id: StageKey;
+	/** days: 공부한 날로부터 value일 후 / review: 공부한 날 이후 value번째 복습일 */
+	type: "days" | "review";
+	value: number;
+	mode: Mode;
+}
+
+/** 기본값: 다음 날(흐름) / 3일 후(전체) / 복습일·이번주(흐름) / 복습일·전주(전체) */
+export const DEFAULT_STAGES: StageDef[] = [
+	{ id: "d1", type: "days", value: 1, mode: "flow" },
+	{ id: "d3", type: "days", value: 3, mode: "full" },
+	{ id: "thuFlow", type: "review", value: 1, mode: "flow" },
+	{ id: "thuFull", type: "review", value: 2, mode: "full" },
+];
+
 export interface Settings {
 	/** 이 날짜 이후의 데일리 노트만 추적 (YYYY-MM-DD) */
 	startDate: string;
@@ -37,6 +54,8 @@ export interface Settings {
 	parentHeading: string;
 	/** 복습일 요일 (0=일 ... 4=목) */
 	reviewWeekday: number;
+	/** 복습 주기 목록 */
+	stages: StageDef[];
 	/** 같은 날 겹치는 단계를 하나로 합치기 */
 	mergeSameDay: boolean;
 	/** 밀린 복습 표시 */
@@ -55,6 +74,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	dailyFormat: "",
 	parentHeading: "## 학습",
 	reviewWeekday: 4,
+	stages: DEFAULT_STAGES.map((st) => ({ ...st })),
 	mergeSameDay: false,
 	showOverdue: true,
 	markInNote: true,

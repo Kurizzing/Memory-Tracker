@@ -1,25 +1,25 @@
-import type { Mode, StageKey, Unit } from "./types";
+import type { Mode, StageDef, StageKey, Unit } from "./types";
 
-export const STAGES: StageKey[] = ["d1", "d3", "thuFlow", "thuFull"];
+export const MODE_LABEL: Record<Mode, string> = { flow: "흐름 인출", full: "전체 인출" };
+export const MODE_ICON: Record<Mode, string> = { flow: "📗", full: "📘" };
 
-export const STAGE_MODE: Record<StageKey, Mode> = {
-	d1: "flow",
-	d3: "full",
-	thuFlow: "flow",
-	thuFull: "full",
-};
+/** 단계 이름: "1일 후", "3일 후", "복습일 · 이번주", "복습일 · 전주", "복습일 · 2주 전" */
+export function stageLabel(st: StageDef): string {
+	if (st.type === "days") return st.value === 1 ? "다음 날" : `${st.value}일 후`;
+	if (st.value <= 1) return "복습일 · 이번주";
+	if (st.value === 2) return "복습일 · 전주";
+	return `복습일 · ${st.value - 1}주 전`;
+}
 
-export const STAGE_LABEL: Record<StageKey, string> = {
-	d1: "다음 날",
-	d3: "3일 후",
-	thuFlow: "복습일 · 이번주",
-	thuFull: "복습일 · 전주",
-};
+/** 합칠 때 대표 단계 / 표시 순서: 전체 인출 > 흐름 인출, 복습일 > 일수, 값이 큰 것 먼저 */
+function rank(st: StageDef): number {
+	return (st.mode === "full" ? 0 : 2) * 1e6 + (st.type === "review" ? 0 : 1) * 1e5 - st.value;
+}
 
-/** 합칠 때 대표 단계 우선순위 (전체 인출 > 흐름 인출) */
-const MERGE_PRIORITY: StageKey[] = ["thuFull", "d3", "thuFlow", "d1"];
-/** 화면 표시 순서 */
-export const GROUP_ORDER: StageKey[] = ["thuFull", "thuFlow", "d3", "d1"];
+/** 화면 그룹 순서: 복습일(전주 → 이번주) 먼저, 그다음 일수 단계(큰 값 먼저) */
+function displayRank(st: StageDef): number {
+	return (st.type === "review" ? 0 : 1) * 1e5 - st.value;
+}
 
 // ---- 날짜 유틸 (YYYY-MM-DD 문자열, UTC 기준으로 계산해 시간대 영향 없음) ----
 
@@ -49,15 +49,17 @@ export function nextWeekdayAfter(date: string, wd: number): string {
 	return addDays(date, diff);
 }
 
+/** 공부한 날짜로부터 단계 하나의 예정일 */
+export function dueDate(date: string, st: StageDef, reviewWeekday: number): string {
+	if (st.type === "days") return addDays(date, st.value);
+	return addDays(nextWeekdayAfter(date, reviewWeekday), 7 * (Math.max(1, st.value) - 1));
+}
+
 /** 공부한 날짜로부터 각 단계의 예정일 */
-export function dueDates(date: string, reviewWeekday: number): Record<StageKey, string> {
-	const flow = nextWeekdayAfter(date, reviewWeekday);
-	return {
-		d1: addDays(date, 1),
-		d3: addDays(date, 3),
-		thuFlow: flow,
-		thuFull: addDays(flow, 7),
-	};
+export function dueDates(date: string, stages: StageDef[], reviewWeekday: number): Record<StageKey, string> {
+	const out: Record<StageKey, string> = {};
+	for (const st of stages) out[st.id] = dueDate(date, st, reviewWeekday);
+	return out;
 }
 
 // ---- 복습 목록 ----
@@ -65,9 +67,9 @@ export function dueDates(date: string, reviewWeekday: number): Record<StageKey, 
 export interface ReviewItem {
 	unit: Unit;
 	/** 이 항목이 대표하는 단계들 (합치기 꺼짐이면 항상 1개) */
-	stages: StageKey[];
+	stages: StageDef[];
 	/** 표시 그룹 (대표 단계) */
-	group: StageKey;
+	group: StageDef;
 	mode: Mode;
 	due: string;
 	overdue: boolean;
@@ -75,24 +77,25 @@ export interface ReviewItem {
 }
 
 export interface ItemOptions {
+	stages: StageDef[];
 	reviewWeekday: number;
 	merge: boolean;
 	includeOverdue: boolean;
 	startDate: string;
 }
 
-function makeItems(unit: Unit, stages: StageKey[], due: string, overdue: boolean, merge: boolean): ReviewItem[] {
+function makeItems(unit: Unit, stages: StageDef[], due: string, overdue: boolean, merge: boolean): ReviewItem[] {
 	if (stages.length === 0) return [];
-	const build = (ss: StageKey[]): ReviewItem => {
-		const group = MERGE_PRIORITY.find((s) => ss.includes(s)) as StageKey;
+	const build = (ss: StageDef[]): ReviewItem => {
+		const group = [...ss].sort((a, b) => rank(a) - rank(b))[0];
 		return {
 			unit,
 			stages: ss,
 			group,
-			mode: STAGE_MODE[group],
+			mode: group.mode,
 			due,
 			overdue,
-			done: ss.every((s) => unit.done.includes(s)),
+			done: ss.every((s) => unit.done.includes(s.id)),
 		};
 	};
 	return merge ? [build(stages)] : stages.map((s) => build([s]));
@@ -107,17 +110,16 @@ export function itemsForDate(units: Unit[], date: string, opts: ItemOptions): Re
 	const items: ReviewItem[] = [];
 	for (const unit of units) {
 		if (!isTracked(unit, opts.startDate)) continue;
-		const dues = dueDates(unit.date, opts.reviewWeekday);
+		const dues = dueDates(unit.date, opts.stages, opts.reviewWeekday);
 
-		const today = STAGES.filter((s) => dues[s] === date);
+		const today = opts.stages.filter((s) => dues[s.id] === date);
 		items.push(...makeItems(unit, today, date, false, opts.merge));
 
 		if (opts.includeOverdue) {
-			const byDue = new Map<string, StageKey[]>();
-			for (const s of STAGES) {
-				if (dues[s] < date && !unit.done.includes(s)) {
-					byDue.set(dues[s], [...(byDue.get(dues[s]) ?? []), s]);
-				}
+			const byDue = new Map<string, StageDef[]>();
+			for (const s of opts.stages) {
+				const d = dues[s.id];
+				if (d < date && !unit.done.includes(s.id)) byDue.set(d, [...(byDue.get(d) ?? []), s]);
 			}
 			for (const [due, ss] of byDue) items.push(...makeItems(unit, ss, due, true, opts.merge));
 		}
@@ -125,16 +127,22 @@ export function itemsForDate(units: Unit[], date: string, opts: ItemOptions): Re
 	return items.sort(compareItems);
 }
 
+/** 화면 그룹 순서로 정렬된 단계 목록 */
+export function groupOrder(stages: StageDef[]): StageDef[] {
+	return [...stages].sort((a, b) => displayRank(a) - displayRank(b));
+}
+
 function compareItems(a: ReviewItem, b: ReviewItem): number {
 	if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
 	if (a.overdue && a.due !== b.due) return a.due < b.due ? -1 : 1;
-	const ga = GROUP_ORDER.indexOf(a.group);
-	const gb = GROUP_ORDER.indexOf(b.group);
+	const ga = displayRank(a.group);
+	const gb = displayRank(b.group);
 	if (ga !== gb) return ga - gb;
 	if (a.unit.date !== b.unit.date) return a.unit.date < b.unit.date ? -1 : 1;
 	return a.unit.order - b.unit.order;
 }
 
-export function isFullyDone(unit: Unit): boolean {
-	return STAGES.every((s) => unit.done.includes(s));
+/** 현재 설정된 단계 중 완료한 수 (삭제된 단계의 기록은 제외) */
+export function doneCount(unit: Unit, stages: StageDef[]): number {
+	return stages.filter((s) => unit.done.includes(s.id)).length;
 }

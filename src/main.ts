@@ -2,8 +2,9 @@ import { moment, Notice, Plugin, TAbstractFile, TFile, WorkspaceLeaf } from "obs
 import { TextPromptModal } from "./modals";
 import { findStudyItems, insertCodeblock, renameHeadingLines, renameStudyItem, setDoneMarks } from "./parser";
 import { reconcileFile, unitLabel } from "./reconcile";
+import { doneCount } from "./schedule";
 import { MemoryTrackerSettingTab } from "./settings";
-import { DEFAULT_SETTINGS, PluginData, Settings, StageKey, Unit } from "./types";
+import { DEFAULT_SETTINGS, DEFAULT_STAGES, PluginData, Settings, StageKey, Unit } from "./types";
 import { ReviewBlock, ReviewView, VIEW_TYPE } from "./view";
 
 const CODEBLOCK_LANG = "memory-tracker";
@@ -65,6 +66,9 @@ export default class MemoryTrackerPlugin extends Plugin {
 	async loadAll() {
 		const data = ((await this.loadData()) ?? {}) as Partial<PluginData>;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
+		if (!Array.isArray(this.settings.stages) || this.settings.stages.length === 0) {
+			this.settings.stages = DEFAULT_STAGES.map((st) => ({ ...st }));
+		}
 		// 0.1.0 데이터(헤더 단위, heading 필드) → 과목 헤더 단위로 변환
 		this.units = (data.units ?? []).map((u) => {
 			const legacy = u as Unit & { heading?: string };
@@ -203,7 +207,7 @@ export default class MemoryTrackerPlugin extends Plugin {
 		if (!(file instanceof TFile)) return;
 		const parent = this.settings.parentHeading;
 		const target = { category: unit.category, text: unit.text, kind: unit.kind };
-		const count = unit.done.length;
+		const count = doneCount(unit, this.settings.stages);
 		const content = await this.app.vault.read(file);
 		if (setDoneMarks(content, parent, target, count) === null) return;
 		await this.app.vault.process(file, (c) => setDoneMarks(c, parent, target, count) ?? c);

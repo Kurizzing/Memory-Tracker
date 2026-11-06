@@ -1,7 +1,9 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type MemoryTrackerPlugin from "./main";
 import { parseHeadingLine } from "./parser";
-import { unitLabel } from "./reconcile";
+import { newId, unitLabel } from "./reconcile";
+import { MODE_LABEL, stageLabel } from "./schedule";
+import { DEFAULT_STAGES, Mode, StageDef } from "./types";
 
 const WEEKDAYS = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
@@ -88,7 +90,7 @@ export class MemoryTrackerSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("복습일 요일")
-			.setDesc("공부한 주의 복습일엔 흐름 인출, 다음 주 복습일엔 전체 인출이에요.")
+			.setDesc("아래 복습 주기의 \"N번째 복습일\" 단계가 이 요일에 떠요.")
 			.addDropdown((d) => {
 				WEEKDAYS.forEach((w, i) => d.addOption(String(i), w));
 				d.setValue(String(s.reviewWeekday)).onChange(async (v) => {
@@ -96,6 +98,8 @@ export class MemoryTrackerSettingTab extends PluginSettingTab {
 					await save();
 				});
 			});
+
+		this.displayStages(containerEl, save);
 
 		new Setting(containerEl)
 			.setName("같은 날 겹치는 단계 합치기")
@@ -175,6 +179,112 @@ export class MemoryTrackerSettingTab extends PluginSettingTab {
 					}),
 				);
 		}
+	}
+
+	/** 복습 주기 목록: 기준(N일 후 / N번째 복습일) + 값 + 방식, 추가/삭제/순서 변경 */
+	private displayStages(containerEl: HTMLElement, save: () => Promise<void>) {
+		const s = this.plugin.settings;
+		const wd = WEEKDAYS[s.reviewWeekday];
+		new Setting(containerEl)
+			.setName("복습 주기")
+			.setDesc(
+				`"N일 후"는 공부한 날로부터 N일 뒤, "N번째 복습일"은 공부한 날 이후 N번째 ${wd}이에요 (1 = 이번주, 2 = 전주 내용). 단계를 지워도 완료 기록은 남아서 다시 추가하면 이어져요.`,
+			)
+			.addButton((b) =>
+				b.setButtonText("기본값으로").onClick(async () => {
+					s.stages = DEFAULT_STAGES.map((st) => ({ ...st }));
+					await save();
+					this.display();
+				}),
+			)
+			.addButton((b) =>
+				b
+					.setButtonText("단계 추가")
+					.setCta()
+					.onClick(async () => {
+						s.stages.push({ id: newId(), type: "days", value: 7, mode: "full" });
+						await save();
+						this.display();
+					}),
+			);
+
+		s.stages.forEach((st, i) => {
+			const row = new Setting(containerEl).setClass("mt-stage-row");
+			const title = () => `${i + 1}. ${stageLabel(st)} · ${MODE_LABEL[st.mode]}`;
+			row.setName(title());
+			row.addDropdown((d) =>
+				d
+					.addOption("days", "N일 후")
+					.addOption("review", "N번째 복습일")
+					.setValue(st.type)
+					.onChange(async (v) => {
+						st.type = v as StageDef["type"];
+						row.setName(title());
+						await save();
+					}),
+			);
+			row.addText((t) => {
+				t.inputEl.type = "number";
+				t.inputEl.min = "1";
+				t.inputEl.style.width = "4.5em";
+				t.setValue(String(st.value)).onChange(async (v) => {
+					const n = Math.floor(Number(v));
+					if (!Number.isFinite(n) || n < 1) return;
+					st.value = n;
+					row.setName(title());
+					await save();
+				});
+			});
+			row.addDropdown((d) =>
+				d
+					.addOption("flow", "흐름 인출")
+					.addOption("full", "전체 인출")
+					.setValue(st.mode)
+					.onChange(async (v) => {
+						st.mode = v as Mode;
+						row.setName(title());
+						await save();
+					}),
+			);
+			row.addExtraButton((b) =>
+				b
+					.setIcon("arrow-up")
+					.setTooltip("위로")
+					.setDisabled(i === 0)
+					.onClick(async () => {
+						if (i === 0) return;
+						[s.stages[i - 1], s.stages[i]] = [s.stages[i], s.stages[i - 1]];
+						await save();
+						this.display();
+					}),
+			);
+			row.addExtraButton((b) =>
+				b
+					.setIcon("arrow-down")
+					.setTooltip("아래로")
+					.setDisabled(i === s.stages.length - 1)
+					.onClick(async () => {
+						if (i === s.stages.length - 1) return;
+						[s.stages[i + 1], s.stages[i]] = [s.stages[i], s.stages[i + 1]];
+						await save();
+						this.display();
+					}),
+			);
+			row.addExtraButton((b) =>
+				b
+					.setIcon("trash")
+					.setTooltip("삭제")
+					.onClick(async () => {
+						if (s.stages.length <= 1) {
+							new Notice("복습 단계는 최소 1개 있어야 해요");
+							return;
+						}
+						s.stages.splice(i, 1);
+						await save();
+						this.display();
+					}),
+			);
+		});
 	}
 
 	private validHeading(v: string): boolean {

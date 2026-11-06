@@ -1,7 +1,6 @@
 import { Menu, setIcon } from "obsidian";
 import type MemoryTrackerPlugin from "./main";
-import { GROUP_ORDER, itemsForDate, ReviewItem, STAGE_LABEL } from "./schedule";
-import type { StageKey } from "./types";
+import { groupOrder, itemsForDate, MODE_ICON, MODE_LABEL, ReviewItem, stageLabel } from "./schedule";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -16,13 +15,6 @@ function md(date: string): string {
 	return `${m}/${d}`;
 }
 
-const GROUP_TITLE: Record<StageKey, string> = {
-	thuFull: "📘 전체 인출 · 전주",
-	thuFlow: "📗 흐름 인출 · 이번주",
-	d3: "📕 3일 후 · 전체 인출",
-	d1: "📙 다음 날 · 흐름 인출",
-};
-
 /** 사이드바 / 코드블록 공용 렌더러 */
 export function renderReviewList(el: HTMLElement, plugin: MemoryTrackerPlugin, date: string): void {
 	el.empty();
@@ -30,6 +22,7 @@ export function renderReviewList(el: HTMLElement, plugin: MemoryTrackerPlugin, d
 	const s = plugin.settings;
 	const isToday = date === plugin.today();
 	const items = itemsForDate(plugin.units, date, {
+		stages: s.stages,
 		reviewWeekday: s.reviewWeekday,
 		merge: s.mergeSameDay,
 		includeOverdue: isToday && s.showOverdue,
@@ -44,12 +37,12 @@ export function renderReviewList(el: HTMLElement, plugin: MemoryTrackerPlugin, d
 	const overdue = items.filter((i) => i.overdue);
 	if (overdue.length) renderGroup(el, plugin, "⏰ 밀린 복습", overdue, true);
 
-	for (const g of GROUP_ORDER) {
-		const gi = items.filter((i) => !i.overdue && i.group === g);
+	for (const g of groupOrder(s.stages)) {
+		const gi = items.filter((i) => !i.overdue && i.group.id === g.id);
 		if (!gi.length) continue;
 		const dates = gi.map((i) => i.unit.date).sort();
 		const range = dates[0] === dates[dates.length - 1] ? md(dates[0]) : `${md(dates[0])}~${md(dates[dates.length - 1])}`;
-		renderGroup(el, plugin, `${GROUP_TITLE[g]} (${range})`, gi, false);
+		renderGroup(el, plugin, `${MODE_ICON[g.mode]} ${stageLabel(g)} · ${MODE_LABEL[g.mode]} (${range})`, gi, false);
 	}
 }
 
@@ -67,7 +60,7 @@ function renderItem(el: HTMLElement, plugin: MemoryTrackerPlugin, item: ReviewIt
 	const cb = row.createEl("input", { type: "checkbox", cls: "mt-check" });
 	cb.checked = item.done;
 	cb.title = "복습 완료";
-	cb.addEventListener("change", () => plugin.setStagesDone(unit, item.stages, cb.checked));
+	cb.addEventListener("change", () => plugin.setStagesDone(unit, item.stages.map((st) => st.id), cb.checked));
 
 	const body = row.createDiv({ cls: "mt-body" });
 	const link = body.createEl("a", { cls: "mt-title", text: unit.text });
@@ -79,10 +72,10 @@ function renderItem(el: HTMLElement, plugin: MemoryTrackerPlugin, item: ReviewIt
 	meta.createSpan({ text: md(unit.date) });
 	if (unit.kind === "item") meta.createSpan({ cls: "mt-tag mt-category", text: unit.category });
 	if (item.overdue) {
-		meta.createSpan({ cls: "mt-tag", text: `${STAGE_LABEL[item.group]} · ${md(item.due)}` });
+		meta.createSpan({ cls: "mt-tag", text: `${stageLabel(item.group)} · ${md(item.due)}` });
 	}
 	if (item.stages.length > 1) {
-		meta.createSpan({ cls: "mt-tag", text: "합침: " + item.stages.map((st) => STAGE_LABEL[st]).join(" + ") });
+		meta.createSpan({ cls: "mt-tag", text: "합침: " + item.stages.map(stageLabel).join(" + ") });
 	}
 
 	const ignore = row.createDiv({ cls: "mt-ignore clickable-icon", attr: { "aria-label": "추적 금지" } });
